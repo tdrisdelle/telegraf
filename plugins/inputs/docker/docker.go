@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"log"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -292,8 +294,8 @@ func (d *Docker) gatherContainer(
 		return fmt.Errorf("Error getting docker stats: %s", err.Error())
 	}
 	defer r.Body.Close()
-	dec := json.NewDecoder(r.Body)
-	if err = dec.Decode(&v); err != nil {
+	body, err := ioutil.ReadAll(r.Body)
+	if err = json.Unmarshal(body, &v); err != nil {
 		if err == io.EOF {
 			return nil
 		}
@@ -325,6 +327,9 @@ func (d *Docker) gatherContainer(
 		}
 	}
 
+	if v.Read.Before(time.Time{}) {
+		log.Printf("E! Negative timestamp found: %s", body)
+	}
 	gatherContainerStats(v, acc, tags, container.ID, d.PerDevice, d.Total, daemonOSType)
 
 	return nil
