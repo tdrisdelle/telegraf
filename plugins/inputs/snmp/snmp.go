@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"log"
 	"math"
 	"net"
 	"os/exec"
@@ -97,6 +98,22 @@ func execCmd(arg0 string, args ...string) ([]byte, error) {
 	return out, nil
 }
 
+type logger struct {
+	enable bool
+}
+
+func (l *logger) Print(v ...interface{}) {
+	if l.enable {
+		log.Printf("D! %s", v)
+	}
+}
+
+func (l *logger) Printf(format string, v ...interface{}) {
+	if l.enable {
+		log.Printf("D! "+format, v)
+	}
+}
+
 // Snmp holds the configuration for the plugin.
 type Snmp struct {
 	// The SNMP agent to query. Format is ADDR[:PORT] (e.g. 1.2.3.4:161).
@@ -135,6 +152,8 @@ type Snmp struct {
 	// fields of a Table, and construct a Table during runtime.
 	Name   string
 	Fields []Field `toml:"field"`
+
+	Debug bool
 
 	connectionCache []snmpConnection
 	initialized     bool
@@ -609,6 +628,8 @@ func (s *Snmp) getConnection(idx int) (snmpConnection, error) {
 	gs.Timeout = s.Timeout.Duration
 
 	gs.Retries = s.Retries
+
+	gs.Logger = &logger{enable: s.Debug}
 
 	switch s.Version {
 	case 3:
