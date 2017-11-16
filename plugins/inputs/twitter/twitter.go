@@ -45,7 +45,7 @@ type RealTwitterClient struct {
 func (c *RealTwitterClient) UsersShow(screenName string) (*twitter.User, *http.Response, error) {
 	userShowParams := &twitter.UserShowParams{ScreenName: screenName}
 	u, r, e := c.client.Users.Show(userShowParams)
-	fmt.Printf("USERS SHOW:\n%+v\n", u)
+	// fmt.Printf("USERS SHOW:\n%+v\n", u)
 	return u, r, e
 }
 
@@ -85,11 +85,7 @@ var sampleConfig = `
 
   ## List of tag names to extract from top-level of JSON server response
   # tag_keys = [
-  #   "followers_count",
-  #   "friends_count",
-  #	  "listed_count",
-  #	  "favourites_count"
-  #   "statuses_count"
+  #   "screen_name",
   # ]
 
   ## Parameters (all values must be strings).
@@ -111,18 +107,12 @@ func (t *Twitter) Description() string {
 func (t *Twitter) Gather(acc telegraf.Accumulator) error {
 	var wg sync.WaitGroup
 
-	fmt.Printf("Gathering time...\n")
 	if t.client.TwitterClient() == nil {
-		fmt.Printf("...no client, so create new one\n")
-
 		httpClient := NewHTTPClient(t.ConsumerKey, t.ConsumerSecret, t.TokenURL)
-
 		client := twitter.NewClient(httpClient)
-
 		t.client.SetTwitterClient(client)
 	}
 
-	fmt.Printf("Iterate through screen names...\n")
 	for _, screenname := range t.ScreenNames {
 		wg.Add(1)
 		go func(screenname string) {
@@ -130,7 +120,6 @@ func (t *Twitter) Gather(acc telegraf.Accumulator) error {
 			acc.AddError(t.gatherScreenName(acc, screenname))
 		}(screenname)
 	}
-	fmt.Printf("Finished screen names\n")
 
 	wg.Wait()
 
@@ -159,9 +148,7 @@ func (t *Twitter) gatherScreenName(
 	} else {
 		msrmnt_name = "twitter_" + t.Name
 	}
-	tags := map[string]string{
-		"screenname": screenName,
-	}
+	tags := map[string]string{}
 
 	parser, err := parsers.NewJSONParser(msrmnt_name, t.TagKeys, tags)
 	if err != nil {
