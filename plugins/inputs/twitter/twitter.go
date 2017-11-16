@@ -45,7 +45,6 @@ type RealTwitterClient struct {
 func (c *RealTwitterClient) UsersShow(screenName string) (*twitter.User, *http.Response, error) {
 	userShowParams := &twitter.UserShowParams{ScreenName: screenName}
 	u, r, e := c.client.Users.Show(userShowParams)
-	// fmt.Printf("USERS SHOW:\n%+v\n", u)
 	return u, r, e
 }
 
@@ -76,9 +75,6 @@ var sampleConfig = `
   ## Twitter Token URL endpoint
   tokenURL = "https://api.twitter.com/oauth2/token"
   
-  ## Set response_timeout (default 5 seconds)
-  response_timeout = "5s"
-
   screenNames = [
   	"thecodeteam"
   ]
@@ -87,12 +83,6 @@ var sampleConfig = `
   # tag_keys = [
   #   "screen_name",
   # ]
-
-  ## Parameters (all values must be strings).
-  # [inputs.twitter.parameters]
-  #   screenname = "kubecon"
-  #   count = 2
-
 `
 
 func (t *Twitter) SampleConfig() string {
@@ -159,13 +149,11 @@ func (t *Twitter) gatherScreenName(
 	if err != nil {
 		return err
 	}
-	fmt.Printf("raw user:\n%+v\n", string(b))
 
 	metrics, err := parser.Parse(b)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("parsed user:\n%+v\n", metrics)
 
 	for _, metric := range metrics {
 		fields := make(map[string]interface{})
