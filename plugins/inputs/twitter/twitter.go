@@ -33,6 +33,7 @@ type Twitter struct {
 
 type TwitterClient interface {
 	UsersShow(screenName string) (*twitter.User, *http.Response, error)
+	TimelineShow(screenName string) ([]twitter.Tweet, *http.Response, error)
 
 	SetTwitterClient(c *twitter.Client)
 	TwitterClient() *twitter.Client
@@ -40,6 +41,12 @@ type TwitterClient interface {
 
 type RealTwitterClient struct {
 	client *twitter.Client
+}
+
+func (c *RealTwitterClient) TimelineShow(screenName string) ([]twitter.Tweet, *http.Response, error) {
+	userTimelineParams := &twitter.UserTimelineParams{ScreenName: screenName}
+	ts, r, e := c.client.Timelines.UserTimeline(userTimelineParams)
+	return ts, r, e
 }
 
 func (c *RealTwitterClient) UsersShow(screenName string) (*twitter.User, *http.Response, error) {
@@ -76,7 +83,8 @@ var sampleConfig = `
   tokenURL = "https://api.twitter.com/oauth2/token"
   
   screenNames = [
-  	"thecodeteam"
+  	"thecodeteam",
+	"biglifetechno",
   ]
 
   ## List of tag names to extract from top-level of JSON server response
@@ -93,7 +101,7 @@ func (t *Twitter) Description() string {
 	return "Read flattened metrics from Twitter API endpoints"
 }
 
-// Gathers data for all servers.
+// Gathers data for all screen names.
 func (t *Twitter) Gather(acc telegraf.Accumulator) error {
 	var wg sync.WaitGroup
 
@@ -107,13 +115,61 @@ func (t *Twitter) Gather(acc telegraf.Accumulator) error {
 		wg.Add(1)
 		go func(screenname string) {
 			defer wg.Done()
-			acc.AddError(t.gatherScreenName(acc, screenname))
+			acc.AddError(t.gatherTimeline(acc, screenname))
 		}(screenname)
 	}
 
 	wg.Wait()
 
 	return nil
+}
+
+func (t *Twitter) gatherTimeline(
+        acc telegraf.Accumulator,
+        screenName string,
+) error {
+        tweets, responseTime, err := t.showTimeline(screenName)
+        if err != nil {
+                return err
+        }
+
+        var msrmnt_name string
+        if t.Name == "" {
+                msrmnt_name = "twitter"
+        } else {
+                msrmnt_name = "twitter_" + t.Name
+        }
+        tags := map[string]string{
+                "screen_name": screenName,
+        }
+        
+	parser, err := parsers.NewJSONParser(msrmnt_name, t.TagKeys, tags)
+        if err != nil {
+                return err
+        }
+	
+	for _, tweet := range tweets {
+	        b, err := json.Marshal(tweet)
+	        if err != nil {
+	                return err
+	        }
+	
+	        metrics, err := parser.Parse(b)
+	        if err != nil {
+	                return err
+	        }
+	
+        	for _, metric := range metrics {
+        	        fields := make(map[string]interface{})
+        	        for k, v := range metric.Fields() {
+        	                fields[k] = v
+        	        }
+        	        fields["response_time"] = responseTime
+        	        acc.AddFields(metric.Name(), fields, metric.Tags())
+        	}
+	}
+
+        return nil
 }
 
 // Gathers data for a particular screenname
@@ -138,7 +194,9 @@ func (t *Twitter) gatherScreenName(
 	} else {
 		msrmnt_name = "twitter_" + t.Name
 	}
-	tags := map[string]string{}
+	tags := map[string]string{
+		"screen_name": screenName,
+	}
 
 	parser, err := parsers.NewJSONParser(msrmnt_name, t.TagKeys, tags)
 	if err != nil {
@@ -177,6 +235,18 @@ func (t *Twitter) showUser(screenName string) (*twitter.User, float64, error) {
 	}
 
 	return user, responseTime, err
+}
+
+func (t *Twitter) showTimeline(screenName string) ([]twitter.Tweet, float64, error) {
+	start := time.Now()
+	tweets, _, err := t.client.TimelineShow(screenName)
+	responseTime := time.Since(start).Seconds()
+
+	if err != nil {
+		return nil, -1, fmt.Errorf("Invalid screen name \"%s\"", screenName)
+	}
+
+	return tweets, responseTime, err 
 }
 
 func init() {

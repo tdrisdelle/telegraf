@@ -15,14 +15,11 @@ func genMockTwitter() []*Twitter {
 			client: &RealTwitterClient{},
 
 			ScreenNames: []string{
-				"thecodeteam",
+				"biglifetechno",
 			},
-			ConsumerKey:    "DXGB3b8cCeqzpiauqGwN9hgEn",
-			ConsumerSecret: "nLdQsLS1FOmVOoJFZy1XSRyzqEM8osNZpIBaeTXrc0QQCEb7lk",
+			ConsumerKey:    "SYyS0sNnxUH1YS3I4I1yyOXQD",
+			ConsumerSecret: "KdsrRdQYz0BVzXHfY40bI4lKmTAq4vJpP66rCOVCNS0IIpACFW",
 			TokenURL:       "https://api.twitter.com/oauth2/token",
-			TagKeys: []string{
-				"screen_name",
-			},
 		},
 	}
 }
