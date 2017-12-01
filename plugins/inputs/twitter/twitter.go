@@ -231,7 +231,7 @@ func (t *Twitter) showUser(screenName string) (*twitter.User, float64, error) {
 	responseTime := time.Since(start).Seconds()
 
 	if err != nil {
-		return nil, -1, fmt.Errorf("Invalid screen name \"%s\": %s", screenName, err.Error)
+		return nil, -1, fmt.Errorf("Invalid screen name \"%s\": %v", screenName, err.Error)
 	}
 
 	return user, responseTime, err
@@ -243,7 +243,7 @@ func (t *Twitter) showTimeline(screenName string) ([]twitter.Tweet, float64, err
 	responseTime := time.Since(start).Seconds()
 
 	if err != nil {
-		return nil, -1, fmt.Errorf("Invalid screen name \"%s\": %s", screenName, err.Error)
+		return nil, -1, fmt.Errorf("Invalid screen name \"%s\": %v", screenName, err.Error)
 	}
 
 	return tweets, responseTime, err 
