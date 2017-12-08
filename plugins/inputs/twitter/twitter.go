@@ -2,7 +2,8 @@ package twitter
 
 import (
 	"encoding/json"
-	"fmt"
+	"log"
+	"io/ioutil"
 	"net/http"
 	"sync"
 	"time"
@@ -18,6 +19,13 @@ import (
 var (
 	utf8BOM = []byte("\xef\xbb\xbf")
 )
+
+// Bool returns a new pointer to the given bool value.
+func Bool(v bool) *bool {
+	ptr := new(bool)
+	*ptr = v
+	return ptr
+}
 
 // Twitter struct
 type Twitter struct {
@@ -44,7 +52,7 @@ type RealTwitterClient struct {
 }
 
 func (c *RealTwitterClient) TimelineShow(screenName string) ([]twitter.Tweet, *http.Response, error) {
-	userTimelineParams := &twitter.UserTimelineParams{ScreenName: screenName}
+	userTimelineParams := &twitter.UserTimelineParams{ScreenName: screenName, Count: 200, TrimUser: Bool(false), ExcludeReplies: Bool(false), IncludeRetweets: Bool(true)}
 	ts, r, e := c.client.Timelines.UserTimeline(userTimelineParams)
 	return ts, r, e
 }
@@ -142,23 +150,23 @@ func (t *Twitter) gatherTimeline(
         tags := map[string]string{
                 "screen_name": screenName,
         }
-        
+
 	parser, err := parsers.NewJSONParser(msrmnt_name, t.TagKeys, tags)
         if err != nil {
                 return err
         }
-	
+
 	for _, tweet := range tweets {
 	        b, err := json.Marshal(tweet)
 	        if err != nil {
 	                return err
 	        }
-	
+
 	        metrics, err := parser.Parse(b)
 	        if err != nil {
 	                return err
 	        }
-	
+
         	for _, metric := range metrics {
         	        fields := make(map[string]interface{})
         	        for k, v := range metric.Fields() {
@@ -230,21 +238,27 @@ func (t *Twitter) showUser(screenName string) (*twitter.User, float64, error) {
 	user, _, err := t.client.UsersShow(screenName)
 	responseTime := time.Since(start).Seconds()
 
-	if err != nil {
-		return nil, -1, fmt.Errorf("Invalid screen name \"%s\": %v", screenName, err.Error)
-	}
+		if err != nil {
+			log.Println("json.Compact:", err)
+			if serr, ok := err.(*json.SyntaxError); ok {
+				log.Println("Occurred at offset:", serr.Offset)
+			}
+		}
 
 	return user, responseTime, err
 }
 
 func (t *Twitter) showTimeline(screenName string) ([]twitter.Tweet, float64, error) {
 	start := time.Now()
-	tweets, _, err := t.client.TimelineShow(screenName)
+	tweets, resp, err := t.client.TimelineShow(screenName)
 	responseTime := time.Since(start).Seconds()
 
-	if err != nil {
-		return nil, -1, fmt.Errorf("Invalid screen name \"%s\": %v", screenName, err.Error)
-	}
+                if err != nil {
+                        log.Println("json.Compact:", err)
+                        if serr, ok := err.(*json.SyntaxError); ok {
+                                log.Println("Occurred at offset:", serr.Offset)
+                        }
+                }
 
 	return tweets, responseTime, err 
 }
