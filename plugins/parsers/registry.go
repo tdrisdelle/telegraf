@@ -9,6 +9,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/parsers/graphite"
 	"github.com/influxdata/telegraf/plugins/parsers/influx"
 	"github.com/influxdata/telegraf/plugins/parsers/json"
+	"github.com/influxdata/telegraf/plugins/parsers/jsonlite"
 	"github.com/influxdata/telegraf/plugins/parsers/nagios"
 	"github.com/influxdata/telegraf/plugins/parsers/value"
 )
@@ -41,7 +42,7 @@ type Parser interface {
 // Config is a struct that covers the data types needed for all parser types,
 // and can be used to instantiate _any_ of the parsers.
 type Config struct {
-	// Dataformat can be one of: json, influx, graphite, value, nagios
+	// Dataformat can be one of: json, youtubejson, influx, graphite, value, nagios
 	DataFormat string
 
 	// Separator only applied to Graphite data.
@@ -49,9 +50,9 @@ type Config struct {
 	// Templates only apply to Graphite data.
 	Templates []string
 
-	// TagKeys only apply to JSON data
+	// TagKeys only apply to JSON & YouTubeJSON data
 	TagKeys []string
-	// MetricName applies to JSON & value. This will be the name of the measurement.
+	// MetricName applies to JSON, YouTubeJSON & value. This will be the name of the measurement.
 	MetricName string
 
 	// Authentication file for collectd
@@ -75,6 +76,9 @@ func NewParser(config *Config) (Parser, error) {
 	switch config.DataFormat {
 	case "json":
 		parser, err = NewJSONParser(config.MetricName,
+			config.TagKeys, config.DefaultTags)
+	case "jsonlite":
+		parser, err = NewJSONLiteParser(config.MetricName,
 			config.TagKeys, config.DefaultTags)
 	case "value":
 		parser, err = NewValueParser(config.MetricName,
@@ -101,6 +105,19 @@ func NewJSONParser(
 	defaultTags map[string]string,
 ) (Parser, error) {
 	parser := &json.JSONParser{
+		MetricName:  metricName,
+		TagKeys:     tagKeys,
+		DefaultTags: defaultTags,
+	}
+	return parser, nil
+}
+
+func NewJSONLiteParser(
+	metricName string,
+	tagKeys []string,
+	defaultTags map[string]string,
+) (Parser, error) {
+	parser := &jsonlite.JSONLiteParser{
 		MetricName:  metricName,
 		TagKeys:     tagKeys,
 		DefaultTags: defaultTags,
