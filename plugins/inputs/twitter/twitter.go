@@ -99,12 +99,12 @@ var sampleConfig = `
   	"thecodeteam",
 	"biglifetechno",
   ]
-
+  
   ## List of tag names to extract from top-level of JSON server response
-  tag_keys = [
-  	"str",
-	"count",
-  ]
+  # tag_keys = [
+  #   "my_tag_1",
+  #   "my_tag_2"
+  # ]
 `
 
 func (t *Twitter) SampleConfig() string {
