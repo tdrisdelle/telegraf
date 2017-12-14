@@ -158,7 +158,7 @@ func (t *Twitter) gatherTimeline(
 		"screen_name": screenName,
 	}
 
-	parser, err := parsers.NewJSONLiteParser(msrmnt_name, t.TagKeys, tags)
+	parser, err := parsers.NewJSONParser(msrmnt_name, t.TagKeys, tags)
 	if err != nil {
 		return err
 	}
