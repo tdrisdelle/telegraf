@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -212,7 +213,17 @@ func (h *YouTube) gatherPlaylist(
 		for _, metric := range metrics {
 			fields := make(map[string]interface{})
 			for k, v := range metric.Fields() {
-				fields[k] = v
+				// statistic counts are coming through as strings, so
+				// force the issue!
+				if strings.HasSuffix(k, "Count") {
+					f, err := strconv.ParseFloat(v.(string), 64)
+					if err != nil {
+						return err
+					}
+					fields[k] = f
+				} else {
+					fields[k] = v
+				}
 			}
 			acc.AddFields(metric.Name(), fields, metric.Tags())
 		}
