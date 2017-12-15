@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strconv"
 	"sync"
 
 	"github.com/dghubble/go-twitter/twitter"
@@ -34,14 +33,13 @@ type Twitter struct {
 	TokenURL       string
 	ScreenNames    []string
 	TagKeys        []string
-	SinceID        int64
 
 	client TwitterClient
 }
 
 type TwitterClient interface {
 	UsersShow(screenName string) (*twitter.User, *http.Response, error)
-	TimelineShow(screenName string, sinceId int64) ([]twitter.Tweet, *http.Response, error)
+	TimelineShow(screenName string) ([]twitter.Tweet, *http.Response, error)
 
 	SetTwitterClient(c *twitter.Client)
 	TwitterClient() *twitter.Client
@@ -51,13 +49,9 @@ type RealTwitterClient struct {
 	client *twitter.Client
 }
 
-func (c *RealTwitterClient) TimelineShow(screenName string, sinceId int64) ([]twitter.Tweet, *http.Response, error) {
+func (c *RealTwitterClient) TimelineShow(screenName string) ([]twitter.Tweet, *http.Response, error) {
 	var userTimelineParams *twitter.UserTimelineParams
-	if sinceId > 0 {
-		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, SinceID: sinceId, TrimUser: Bool(false), ExcludeReplies: Bool(true), IncludeRetweets: Bool(true)}
-	} else {
-		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, Count: 200, TrimUser: Bool(false), ExcludeReplies: Bool(true), IncludeRetweets: Bool(true)}
-	}
+	userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, Count: 200, TrimUser: Bool(false), ExcludeReplies: Bool(true), IncludeRetweets: Bool(true)}
 
 	ts, r, e := c.client.Timelines.UserTimeline(userTimelineParams)
 	return ts, r, e
@@ -132,7 +126,7 @@ func (t *Twitter) Gather(acc telegraf.Accumulator) error {
 		wg.Add(1)
 		go func(screenname string) {
 			defer wg.Done()
-			acc.AddError(t.gatherTimeline(acc, screenname, t.SinceID))
+			acc.AddError(t.gatherTimeline(acc, screenname))
 		}(screenname)
 	}
 
@@ -144,9 +138,8 @@ func (t *Twitter) Gather(acc telegraf.Accumulator) error {
 func (t *Twitter) gatherTimeline(
 	acc telegraf.Accumulator,
 	screenName string,
-	sinceId int64,
 ) error {
-	tweets, err := t.showTimeline(screenName, sinceId)
+	tweets, err := t.showTimeline(screenName)
 	if err != nil {
 		return err
 	}
@@ -165,39 +158,29 @@ func (t *Twitter) gatherTimeline(
 	if err != nil {
 		return err
 	}
+	tweetsBytes, err := json.Marshal(tweets)
+	if err != nil {
+		return err
+	}
 
-	for _, tweet := range tweets {
-		b, err := json.Marshal(tweet)
-		if err != nil {
-			return err
-		}
+	metrics, err := parser.Parse(tweetsBytes)
+	if err != nil {
+		return err
+	}
 
-		metrics, err := parser.Parse(b)
-		if err != nil {
-			return err
+	for _, metric := range metrics {
+		fields := make(map[string]interface{})
+		for k, v := range metric.Fields() {
+			fields[k] = v
 		}
-
-		for _, metric := range metrics {
-			fields := make(map[string]interface{})
-			for k, v := range metric.Fields() {
-				fields[k] = v
-			}
-			id_str := metric.Fields()["id_str"].(string)
-			id, _ := strconv.ParseInt(id_str, 10, 64)
-			if id > sinceId {
-				sinceId = id
-			}
-			metric.AddTag("id", id_str)
-			acc.AddFields(metric.Name(), fields, metric.Tags())
-		}
-		t.SinceID = sinceId
+		acc.AddFields(metric.Name(), fields, metric.Tags())
 	}
 
 	return nil
 }
 
-func (t *Twitter) showTimeline(screenName string, sinceId int64) ([]twitter.Tweet, error) {
-	tweets, _, err := t.client.TimelineShow(screenName, sinceId)
+func (t *Twitter) showTimeline(screenName string) ([]twitter.Tweet, error) {
+	tweets, _, err := t.client.TimelineShow(screenName)
 
 	if err != nil {
 		log.Println("showTimeline: json.Compact:", err)
