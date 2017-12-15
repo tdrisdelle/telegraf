@@ -52,7 +52,7 @@ func (p *JSONLiteParser) parseObject(metrics []telegraf.Metric, jsonOut map[stri
 		delete(jsonOut, tag)
 	}
 
-	f := JSONFlattener{TagKeys: p.TagKeys}
+	f := JSONFlattener{}
 	err := f.FlattenJSON("", jsonOut)
 	if err != nil {
 		return nil, err
@@ -104,8 +104,7 @@ func (p *JSONLiteParser) SetDefaultTags(tags map[string]string) {
 }
 
 type JSONFlattener struct {
-	Fields  map[string]interface{}
-	TagKeys []string
+	Fields map[string]interface{}
 }
 
 // FlattenJSON flattens nested maps/interfaces into a fields map (ignoring bools and string)
@@ -115,7 +114,7 @@ func (f *JSONFlattener) FlattenJSON(
 	if f.Fields == nil {
 		f.Fields = make(map[string]interface{})
 	}
-	return f.FullFlattenJSON(fieldname, v, false, false)
+	return f.FullFlattenJSON(fieldname, v, true, true)
 }
 
 // FullFlattenJSON flattens nested maps/interfaces into a fields map (including bools and string)
@@ -129,10 +128,6 @@ func (f *JSONFlattener) FullFlattenJSON(
 		f.Fields = make(map[string]interface{})
 	}
 	fieldname = strings.Trim(fieldname, "_")
-
-	elts := strings.Split(fieldname, "_")
-	tagFieldKey := elts[len(elts)-1]
-
 	switch t := v.(type) {
 	case map[string]interface{}:
 		for k, v := range t {
@@ -150,33 +145,18 @@ func (f *JSONFlattener) FullFlattenJSON(
 			}
 		}
 	case float64:
-		if contains(f.TagKeys, tagFieldKey) {
-			// do something
-			f.Fields[fieldname] = t
-		} else {
-			return nil
-		}
+		f.Fields[fieldname] = t
 	case string:
 		if convertString {
 			f.Fields[fieldname] = v.(string)
 		} else {
-			if contains(f.TagKeys, tagFieldKey) {
-				// do something
-				f.Fields[fieldname] = v.(string)
-			} else {
-				return nil
-			}
+			return nil
 		}
 	case bool:
 		if convertBool {
 			f.Fields[fieldname] = v.(bool)
 		} else {
-			if contains(f.TagKeys, tagFieldKey) {
-				// do something
-				f.Fields[fieldname] = v.(bool)
-			} else {
-				return nil
-			}
+			return nil
 		}
 	case nil:
 		return nil
@@ -185,15 +165,6 @@ func (f *JSONFlattener) FullFlattenJSON(
 			t, t, fieldname)
 	}
 	return nil
-}
-
-func contains(a []string, s string) bool {
-	for _, x := range a {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }
 
 func isarray(buf []byte) bool {

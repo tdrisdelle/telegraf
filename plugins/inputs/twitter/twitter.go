@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"sync"
 
 	"github.com/dghubble/go-twitter/twitter"
@@ -33,14 +34,14 @@ type Twitter struct {
 	TokenURL       string
 	ScreenNames    []string
 	TagKeys        []string
-	SinceID        float64
+	SinceID        int64
 
 	client TwitterClient
 }
 
 type TwitterClient interface {
 	UsersShow(screenName string) (*twitter.User, *http.Response, error)
-	TimelineShow(screenName string, sinceId float64) ([]twitter.Tweet, *http.Response, error)
+	TimelineShow(screenName string, sinceId int64) ([]twitter.Tweet, *http.Response, error)
 
 	SetTwitterClient(c *twitter.Client)
 	TwitterClient() *twitter.Client
@@ -50,10 +51,10 @@ type RealTwitterClient struct {
 	client *twitter.Client
 }
 
-func (c *RealTwitterClient) TimelineShow(screenName string, sinceId float64) ([]twitter.Tweet, *http.Response, error) {
+func (c *RealTwitterClient) TimelineShow(screenName string, sinceId int64) ([]twitter.Tweet, *http.Response, error) {
 	var userTimelineParams *twitter.UserTimelineParams
 	if sinceId > 0 {
-		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, SinceID: int64(sinceId), TrimUser: Bool(false), ExcludeReplies: Bool(true), IncludeRetweets: Bool(true)}
+		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, SinceID: sinceId, TrimUser: Bool(false), ExcludeReplies: Bool(true), IncludeRetweets: Bool(true)}
 	} else {
 		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, Count: 200, TrimUser: Bool(false), ExcludeReplies: Bool(true), IncludeRetweets: Bool(true)}
 	}
@@ -105,6 +106,8 @@ var sampleConfig = `
   #   "my_tag_1",
   #   "my_tag_2"
   # ]
+  
+  fieldpass = ["*_count", "*id", "*id_str", "*is_quoted_status", "favorited", "retweeted"]
 `
 
 func (t *Twitter) SampleConfig() string {
@@ -141,7 +144,7 @@ func (t *Twitter) Gather(acc telegraf.Accumulator) error {
 func (t *Twitter) gatherTimeline(
 	acc telegraf.Accumulator,
 	screenName string,
-	sinceId float64,
+	sinceId int64,
 ) error {
 	tweets, err := t.showTimeline(screenName, sinceId)
 	if err != nil {
@@ -158,7 +161,7 @@ func (t *Twitter) gatherTimeline(
 		"screen_name": screenName,
 	}
 
-	parser, err := parsers.NewJSONParser(msrmnt_name, t.TagKeys, tags)
+	parser, err := parsers.NewJSONLiteParser(msrmnt_name, t.TagKeys, tags)
 	if err != nil {
 		return err
 	}
@@ -178,15 +181,13 @@ func (t *Twitter) gatherTimeline(
 			fields := make(map[string]interface{})
 			for k, v := range metric.Fields() {
 				fields[k] = v
-				if k == "id" {
-					id := v.(float64)
-					if id > sinceId {
-						sinceId = id
-					}
-				} else if k == "id_str" {
-
-				}
 			}
+			id_str := metric.Fields()["id_str"].(string)
+			id, _ := strconv.ParseInt(id_str, 10, 64)
+			if id > sinceId {
+				sinceId = id
+			}
+			metric.AddTag("id", id_str)
 			acc.AddFields(metric.Name(), fields, metric.Tags())
 		}
 		t.SinceID = sinceId
@@ -195,7 +196,7 @@ func (t *Twitter) gatherTimeline(
 	return nil
 }
 
-func (t *Twitter) showTimeline(screenName string, sinceId float64) ([]twitter.Tweet, error) {
+func (t *Twitter) showTimeline(screenName string, sinceId int64) ([]twitter.Tweet, error) {
 	tweets, _, err := t.client.TimelineShow(screenName, sinceId)
 
 	if err != nil {

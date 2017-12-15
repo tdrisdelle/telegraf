@@ -83,16 +83,39 @@ var sampleConfig = `
   videoStatisticsURI = "https://www.googleapis.com/youtube/v3/videos?part=statistics"
 
   apiKey = ""
+  
+  ## Set response_timeout (default 5 seconds)
+  response_timeout = "5s"
 
+  ## HTTP method to use: GET or POST (case-sensitive)
+  method = "GET"
+  
   ## List of tag names to extract from top-level of JSON server response
-  tag_keys = [
-	"videoId",
-	"viewCount",
-	"likeCount",
-	"dislikeCount",
-	"favoriteCount",
-	"commentCount",
-  ]
+  # tag_keys = [
+  #   "my_tag_1",
+  #   "my_tag_2"
+  # ]
+
+  ## HTTP parameters (all values must be strings).  For "GET" requests, data
+  ## will be included in the query.  For "POST" requests, data will be included
+  ## in the request body as "x-www-form-urlencoded".
+  # [inputs.httpjson.parameters]
+  #   event_type = "cpu_spike"
+  #   threshold = "0.75"
+
+  ## HTTP Headers (all values must be strings)
+  # [inputs.youtube.headers]
+  #   X-Auth-Token = "my-xauth-token"
+  #   apiVersion = "v1"
+
+  ## Optional SSL Config
+  # ssl_ca = "/etc/telegraf/ca.pem"
+  # ssl_cert = "/etc/telegraf/cert.pem"
+  # ssl_key = "/etc/telegraf/key.pem"
+  ## Use SSL but skip chain & host verification
+  # insecure_skip_verify = false
+  
+  fieldpass = ["*_statistics_*", "*id"]
 `
 
 func (h *YouTube) SampleConfig() string {
@@ -103,7 +126,7 @@ func (h *YouTube) Description() string {
 	return "Read flattened metrics from one or more JSON HTTP endpoints"
 }
 
-// Gathers data for all servers.
+// Gathers data for all videos in a playlist.
 func (h *YouTube) Gather(acc telegraf.Accumulator) error {
 	var wg sync.WaitGroup
 
@@ -127,7 +150,7 @@ func (h *YouTube) Gather(acc telegraf.Accumulator) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		acc.AddError(h.gatherServer(acc))
+		acc.AddError(h.gatherPlaylist(acc))
 	}()
 
 	wg.Wait()
@@ -135,15 +158,13 @@ func (h *YouTube) Gather(acc telegraf.Accumulator) error {
 	return nil
 }
 
-// Gathers data from a particular server
+// Gathers data from a youtube endpoints for videos in a playlist
 // Parameters:
 //     acc      : The telegraf Accumulator to use
-//     serverURL: endpoint to send request to
-//     service  : the service being queried
 //
 // Returns:
 //     error: Any error that may have occurred
-func (h *YouTube) gatherServer(
+func (h *YouTube) gatherPlaylist(
 	acc telegraf.Accumulator,
 ) error {
 	resp, _, err := h.sendRequest(h.PlaylistItemsURI + "&key=" + h.ApiKey)
@@ -164,40 +185,39 @@ func (h *YouTube) gatherServer(
 		return err
 	}
 
-	videos, err := parser.Parse([]byte(resp))
+	playlistItemsMetrics, err := parser.Parse([]byte(resp))
 	if err != nil {
 		return err
 	}
 
-	for _, video := range videos {
-		// check to see if the video Fields() map contains a key that ends with "videoId"
-		for k, v := range video.Fields() {
-			if strings.HasSuffix(k, "videoId") {
-				videoId := v.(string)
-				// get stats
-				resp, _, err := h.sendRequest(h.VideoStatisticsURI + "&id=" + videoId + "&key=" + h.ApiKey)
-				if err != nil {
-					return err
-				}
-
-				metrics, err := parser.Parse([]byte(resp))
-				if err != nil {
-					return err
-				}
-
-				for _, metric := range metrics {
-					fields := make(map[string]interface{})
-					for k, v := range metric.Fields() {
-						fields[k] = v
-					}
-					// fields["id"] = videoId
-					metric.AddTag("id", videoId)
-					acc.AddFields(metric.Name(), fields, metric.Tags())
-				}
-			}
+	// iterate through the metric items in the playlist, extract their videoId
+	// and then request the stats for that video
+	for k, item := range playlistItemsMetrics[0].Fields() {
+		if !strings.HasSuffix(k, "videoId") {
+			continue
 		}
 
+		videoId := item.(string)
+		// get stats
+		resp, _, err := h.sendRequest(h.VideoStatisticsURI + "&id=" + videoId + "&key=" + h.ApiKey)
+		if err != nil {
+			return err
+		}
+
+		metrics, err := parser.Parse([]byte(resp))
+		if err != nil {
+			return err
+		}
+
+		for _, metric := range metrics {
+			fields := make(map[string]interface{})
+			for k, v := range metric.Fields() {
+				fields[k] = v
+			}
+			acc.AddFields(metric.Name(), fields, metric.Tags())
+		}
 	}
+
 	return nil
 }
 
