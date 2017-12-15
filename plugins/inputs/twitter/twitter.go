@@ -32,7 +32,7 @@ type Twitter struct {
 	ConsumerSecret string
 	ConsumerKey    string
 	TokenURL       string
-	ScreenNames    []string
+	ScreenName     string
 	TagKeys        []string
 	SinceID        int64
 
@@ -54,8 +54,10 @@ type RealTwitterClient struct {
 func (c *RealTwitterClient) TimelineShow(screenName string, sinceId int64) ([]twitter.Tweet, *http.Response, error) {
 	var userTimelineParams *twitter.UserTimelineParams
 	if sinceId > 0 {
+		log.Printf("Twitter screenName=%v and sinceId=%v\n", screenName, sinceId)
 		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, SinceID: sinceId, TrimUser: Bool(false), ExcludeReplies: Bool(true), IncludeRetweets: Bool(true)}
 	} else {
+		log.Printf("Twitter screenName=%v and sinceId=0\n", screenName)
 		userTimelineParams = &twitter.UserTimelineParams{ScreenName: screenName, Count: 200, TrimUser: Bool(false), ExcludeReplies: Bool(true), IncludeRetweets: Bool(true)}
 	}
 
@@ -96,10 +98,8 @@ var sampleConfig = `
   ## Twitter Token URL endpoint
   tokenURL = "https://api.twitter.com/oauth2/token"
   
-  screenNames = [
-  	"thecodeteam",
-	"biglifetechno",
-  ]
+  screenName = "thecodeteam"
+  sinceID = 0
   
   ## List of tag names to extract from top-level of JSON server response
   # tag_keys = [
@@ -128,13 +128,11 @@ func (t *Twitter) Gather(acc telegraf.Accumulator) error {
 		t.client.SetTwitterClient(client)
 	}
 
-	for _, screenname := range t.ScreenNames {
-		wg.Add(1)
-		go func(screenname string) {
-			defer wg.Done()
-			acc.AddError(t.gatherTimeline(acc, screenname, t.SinceID))
-		}(screenname)
-	}
+	wg.Add(1)
+	go func(screenname string) {
+		defer wg.Done()
+		acc.AddError(t.gatherTimeline(acc, screenname, t.SinceID))
+	}(t.ScreenName)
 
 	wg.Wait()
 
