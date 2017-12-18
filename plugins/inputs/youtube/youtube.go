@@ -225,6 +225,7 @@ func (h *YouTube) gatherPlaylist(
 					fields[k] = v
 				}
 			}
+			metric.AddTag("items_0_id", videoId)
 			acc.AddFields(metric.Name(), fields, metric.Tags())
 		}
 	}
