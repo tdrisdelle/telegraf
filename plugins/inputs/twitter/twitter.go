@@ -95,12 +95,13 @@ var sampleConfig = `
   ]
   
   ## List of tag names to extract from top-level of JSON server response
-  # tag_keys = [
-  #   "my_tag_1",
-  #   "my_tag_2"
-  # ]
+  tag_keys = [
+    "id_str",
+	"retweeted",
+	"favorited",
+  ]
   
-  fieldpass = ["*_count", "created_at", "*id_str", "*is_quoted_status", "favorited", "retweeted"]
+  fieldpass = ["user_statuses_count", "user_favourites_count", "user_followers_count", "user_friends_count", "user_listed_count", "retweet_count", "favorite_count", "created_at", "text"]
 `
 
 func (t *Twitter) SampleConfig() string {
