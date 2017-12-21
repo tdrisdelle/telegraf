@@ -7,11 +7,10 @@ import (
 	"sync"
 
 	"github.com/dghubble/go-twitter/twitter"
+	"github.com/dghubble/oauth1"
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/parsers"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/clientcredentials"
 )
 
 var (
@@ -30,7 +29,8 @@ type Twitter struct {
 	Name           string
 	ConsumerSecret string
 	ConsumerKey    string
-	TokenURL       string
+	AccessToken    string
+	AccessSecret   string
 	ScreenNames    []string
 	TagKeys        []string
 
@@ -71,28 +71,27 @@ func (c *RealTwitterClient) TwitterClient() *twitter.Client {
 	return c.client
 }
 
-func NewHTTPClient(consumerKey string, consumerSecret string, tokenURL string) *http.Client {
-	config := &clientcredentials.Config{
-		ClientID:     consumerKey,
-		ClientSecret: consumerSecret,
-		TokenURL:     tokenURL,
-	}
-	return config.Client(oauth2.NoContext)
+func NewHTTPClient(consumerKey string, consumerSecret string, accessToken string, accessSecret string) *http.Client {
+	config := oauth1.NewConfig(consumerKey, consumerSecret)
+	token := oauth1.NewToken(accessToken, accessSecret)
+
+	return config.Client(oauth1.NoContext, token)
 }
 
 var sampleConfig = `
   ## NOTE This plugin only reads numerical measurements, strings and booleans
   ## will be ignored.
     
-  consumerKey = "DXGB3b8cCeqzpiauqGwN9hgEn"
-  consumerSecret = "nLdQsLS1FOmVOoJFZy1XSRyzqEM8osNZpIBaeTXrc0QQCEb7lk"
+  consumerKey = ""
+  consumerSecret = ""
+  accessToken  = ""
+  accessSecret = ""
 
   ## Twitter Token URL endpoint
   tokenURL = "https://api.twitter.com/oauth2/token"
   
   screenNames = [
   	"thecodeteam",
-	"biglifetechno",
   ]
   
   ## List of tag names to extract from top-level of JSON server response
@@ -101,7 +100,7 @@ var sampleConfig = `
   #   "my_tag_2"
   # ]
   
-  fieldpass = ["*_count", "*id", "*id_str", "*is_quoted_status", "favorited", "retweeted"]
+  fieldpass = ["*_count", "created_at", "*id_str", "*is_quoted_status", "favorited", "retweeted"]
 `
 
 func (t *Twitter) SampleConfig() string {
@@ -117,7 +116,7 @@ func (t *Twitter) Gather(acc telegraf.Accumulator) error {
 	var wg sync.WaitGroup
 
 	if t.client.TwitterClient() == nil {
-		httpClient := NewHTTPClient(t.ConsumerKey, t.ConsumerSecret, t.TokenURL)
+		httpClient := NewHTTPClient(t.ConsumerKey, t.ConsumerSecret, t.AccessToken, t.AccessSecret)
 		client := twitter.NewClient(httpClient)
 		t.client.SetTwitterClient(client)
 	}
