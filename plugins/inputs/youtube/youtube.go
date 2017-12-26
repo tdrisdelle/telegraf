@@ -81,7 +81,7 @@ var sampleConfig = `
   ## will be ignored.
 
   playlistItemsURI = "https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=PLbssOJyyvHuWiBQAg9EFWH570timj2fxt"
-  videoStatisticsURI = "https://www.googleapis.com/youtube/v3/videos?part=statistics"
+  videoStatisticsURI = "https://www.googleapis.com/youtube/v3/videos?part=statistics,snippet"
 
   apiKey = ""
   
@@ -116,7 +116,7 @@ var sampleConfig = `
   ## Use SSL but skip chain & host verification
   # insecure_skip_verify = false
   
-  fieldpass = ["*_statistics_*", "*id"]
+  fieldpass = ["items_*_statistics_*", "items_*_snippet_title"]
 `
 
 func (h *YouTube) SampleConfig() string {
@@ -194,25 +194,26 @@ func (h *YouTube) gatherPlaylist(
 	// iterate through the metric items in the playlist, extract their videoId
 	// and then request the stats for that video
 	for k, item := range playlistItemsMetrics[0].Fields() {
-		if !strings.HasSuffix(k, "videoId") {
+		if !strings.HasSuffix(k, "_videoId") {
 			continue
 		}
 
 		videoId := item.(string)
+
 		// get stats
 		resp, _, err := h.sendRequest(h.VideoStatisticsURI + "&id=" + videoId + "&key=" + h.ApiKey)
 		if err != nil {
 			return err
 		}
 
-		metrics, err := parser.Parse([]byte(resp))
+		video, err := parser.Parse([]byte(resp))
 		if err != nil {
 			return err
 		}
 
-		for _, metric := range metrics {
+		for _, vMetric := range video {
 			fields := make(map[string]interface{})
-			for k, v := range metric.Fields() {
+			for k, v := range vMetric.Fields() {
 				// statistic counts are coming through as strings, so
 				// force the issue!
 				if strings.HasSuffix(k, "Count") {
@@ -225,8 +226,9 @@ func (h *YouTube) gatherPlaylist(
 					fields[k] = v
 				}
 			}
-			metric.AddTag("items_0_id", videoId)
-			acc.AddFields(metric.Name(), fields, metric.Tags())
+			// vMetric.AddField("pageInfo_totalResults", videoCount)
+			vMetric.AddTag("items_0_id", videoId)
+			acc.AddFields(vMetric.Name(), fields, vMetric.Tags())
 		}
 	}
 
