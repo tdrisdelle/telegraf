@@ -100,7 +100,7 @@ var sampleConfig = `
   ## HTTP parameters (all values must be strings).  For "GET" requests, data
   ## will be included in the query.  For "POST" requests, data will be included
   ## in the request body as "x-www-form-urlencoded".
-  # [inputs.httpjson.parameters]
+  # [inputs.youtube.parameters]
   #   event_type = "cpu_spike"
   #   threshold = "0.75"
 
@@ -119,39 +119,39 @@ var sampleConfig = `
   fieldpass = ["items_*_statistics_*", "items_*_snippet_title"]
 `
 
-func (h *YouTube) SampleConfig() string {
+func (y *YouTube) SampleConfig() string {
 	return sampleConfig
 }
 
-func (h *YouTube) Description() string {
+func (y *YouTube) Description() string {
 	return "Read flattened metrics from one or more JSON HTTP endpoints"
 }
 
 // Gathers data for all videos in a playlist.
-func (h *YouTube) Gather(acc telegraf.Accumulator) error {
+func (y *YouTube) Gather(acc telegraf.Accumulator) error {
 	var wg sync.WaitGroup
 
-	if h.client.HTTPClient() == nil {
+	if y.client.HTTPClient() == nil {
 		tlsCfg, err := internal.GetTLSConfig(
-			h.SSLCert, h.SSLKey, h.SSLCA, h.InsecureSkipVerify)
+			y.SSLCert, y.SSLKey, y.SSLCA, y.InsecureSkipVerify)
 		if err != nil {
 			return err
 		}
 		tr := &http.Transport{
-			ResponseHeaderTimeout: h.ResponseTimeout.Duration,
+			ResponseHeaderTimeout: y.ResponseTimeout.Duration,
 			TLSClientConfig:       tlsCfg,
 		}
 		client := &http.Client{
 			Transport: tr,
-			Timeout:   h.ResponseTimeout.Duration,
+			Timeout:   y.ResponseTimeout.Duration,
 		}
-		h.client.SetHTTPClient(client)
+		y.client.SetHTTPClient(client)
 	}
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		acc.AddError(h.gatherPlaylist(acc))
+		acc.AddError(y.gatherPlaylist(acc))
 	}()
 
 	wg.Wait()
@@ -165,23 +165,23 @@ func (h *YouTube) Gather(acc telegraf.Accumulator) error {
 //
 // Returns:
 //     error: Any error that may have occurred
-func (h *YouTube) gatherPlaylist(
+func (y *YouTube) gatherPlaylist(
 	acc telegraf.Accumulator,
 ) error {
-	resp, _, err := h.sendRequest(h.PlaylistItemsURI + "&key=" + h.ApiKey)
+	resp, _, err := y.sendRequest(y.PlaylistItemsURI + "&key=" + y.ApiKey)
 	if err != nil {
 		return err
 	}
 
 	var msrmnt_name string
-	if h.Name == "" {
+	if y.Name == "" {
 		msrmnt_name = "youtube"
 	} else {
-		msrmnt_name = "youtube_" + h.Name
+		msrmnt_name = "youtube_" + y.Name
 	}
 	tags := map[string]string{}
 
-	parser, err := parsers.NewJSONLiteParser(msrmnt_name, h.TagKeys, tags)
+	parser, err := parsers.NewJSONLiteParser(msrmnt_name, y.TagKeys, tags)
 	if err != nil {
 		return err
 	}
@@ -201,7 +201,7 @@ func (h *YouTube) gatherPlaylist(
 		videoId := item.(string)
 
 		// get stats
-		resp, _, err := h.sendRequest(h.VideoStatisticsURI + "&id=" + videoId + "&key=" + h.ApiKey)
+		resp, _, err := y.sendRequest(y.VideoStatisticsURI + "&id=" + videoId + "&key=" + y.ApiKey)
 		if err != nil {
 			return err
 		}
@@ -243,7 +243,7 @@ func (h *YouTube) gatherPlaylist(
 // Returns:
 //     string: body of the response
 //     error : Any error that may have occurred
-func (h *YouTube) sendRequest(serverURL string) (string, float64, error) {
+func (y *YouTube) sendRequest(serverURL string) (string, float64, error) {
 	// Prepare URL
 	requestURL, err := url.Parse(serverURL)
 	if err != nil {
@@ -252,29 +252,29 @@ func (h *YouTube) sendRequest(serverURL string) (string, float64, error) {
 
 	data := url.Values{}
 	switch {
-	case h.Method == "GET":
+	case y.Method == "GET":
 		params := requestURL.Query()
-		for k, v := range h.Parameters {
+		for k, v := range y.Parameters {
 			params.Add(k, v)
 		}
 		requestURL.RawQuery = params.Encode()
 
-	case h.Method == "POST":
+	case y.Method == "POST":
 		requestURL.RawQuery = ""
-		for k, v := range h.Parameters {
+		for k, v := range y.Parameters {
 			data.Add(k, v)
 		}
 	}
 
 	// Create + send request
-	req, err := http.NewRequest(h.Method, requestURL.String(),
+	req, err := http.NewRequest(y.Method, requestURL.String(),
 		strings.NewReader(data.Encode()))
 	if err != nil {
 		return "", -1, err
 	}
 
 	// Add header parameters
-	for k, v := range h.Headers {
+	for k, v := range y.Headers {
 		if strings.ToLower(k) == "host" {
 			req.Host = v
 		} else {
@@ -283,7 +283,7 @@ func (h *YouTube) sendRequest(serverURL string) (string, float64, error) {
 	}
 
 	start := time.Now()
-	resp, err := h.client.MakeRequest(req)
+	resp, err := y.client.MakeRequest(req)
 	if err != nil {
 		return "", -1, err
 	}
