@@ -22,14 +22,16 @@ var (
 
 // Wordpress struct
 type Wordpress struct {
-	Name              string
-	WordpressStatsURI string
-	BearerToken       string
-	Method            string
-	TagKeys           []string
-	ResponseTimeout   internal.Duration
-	Parameters        map[string]string
-	Headers           map[string]string
+	Name                string
+	TopPostsStatsURI    string
+	SummaryStatsURI     string
+	BearerToken         string
+	Method              string
+	TopPostsTagKeys     []string
+	SummaryStatsTagKeys []string
+	ResponseTimeout     internal.Duration
+	Parameters          map[string]string
+	Headers             map[string]string
 
 	// Path to CA file
 	SSLCA string `toml:"ssl_ca"`
@@ -79,15 +81,19 @@ var sampleConfig = `
   ## will be ignored.
   interval = "24h"
 
-  wordpressStatsURI = "https://public-api.wordpress.com/rest/v1/sites/YOUR_SITE_ID/stats/top-posts?fields=top-posts"
+  topPostsStatsURI = "https://public-api.wordpress.com/rest/v1/sites/YOUR_SITE_ID/stats/top-posts?fields=top-posts"
+  summaryStatsURI = "https://public-api.wordpress.com/rest/v1.1/sites/YOUR_SITE_ID/stats/summary"
   
   ## Set response_timeout (default 5 seconds)
   response_timeout = "5s"
 
   ## List of tag names to extract from top-level of JSON server response
-  tag_keys = [
+  top_posts_tag_keys = [
     "date",
-	"postId"
+	"postId",
+  ]
+	
+  summary_stats_tag_keys = [
   ]
 
   ## HTTP Headers (all values must be strings)
@@ -128,7 +134,8 @@ func (w *Wordpress) Gather(acc telegraf.Accumulator) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		acc.AddError(w.gatherWPStats(acc))
+		acc.AddError(w.gatherTopPostsStats(acc))
+		acc.AddError(w.gatherSummaryStats(acc))
 	}()
 
 	wg.Wait()
@@ -136,16 +143,16 @@ func (w *Wordpress) Gather(acc telegraf.Accumulator) error {
 	return nil
 }
 
-// Gathers data from a wordpress stats endpoint for a blog
+// Gathers data from a wordpress stats endpoint about top posts
 // Parameters:
 //     acc      : The telegraf Accumulator to use
 //
 // Returns:
 //     error: Any error that may have occurred
-func (w *Wordpress) gatherWPStats(
+func (w *Wordpress) gatherTopPostsStats(
 	acc telegraf.Accumulator,
 ) error {
-	resp, _, err := w.sendRequest(w.WordpressStatsURI)
+	resp, _, err := w.sendRequest(w.TopPostsStatsURI)
 	if err != nil {
 		return err
 	}
@@ -157,7 +164,7 @@ func (w *Wordpress) gatherWPStats(
 	}
 	tags := map[string]string{}
 
-	parser, err := parsers.NewJSONLiteParser(msrmnt_name, w.TagKeys, tags)
+	parser, err := parsers.NewJSONLiteParser(msrmnt_name, w.TopPostsTagKeys, tags)
 	if err != nil {
 		return err
 	}
@@ -173,6 +180,49 @@ func (w *Wordpress) gatherWPStats(
 		for k, v := range metric.Fields() {
 			fields[k] = v
 		}
+		metric.AddTag("api", "top-posts")
+		acc.AddFields(metric.Name(), fields, metric.Tags())
+	}
+
+	return nil
+}
+
+// Gathers data from a wordpress stats endpoint about site summary
+// Parameters:
+//     acc      : The telegraf Accumulator to use
+//
+// Returns:
+//     error: Any error that may have occurred
+func (w *Wordpress) gatherSummaryStats(
+	acc telegraf.Accumulator,
+) error {
+	resp, _, err := w.sendRequest(w.SummaryStatsURI)
+	if err != nil {
+		return err
+	}
+	var msrmnt_name string
+	if w.Name == "" {
+		msrmnt_name = "wordpress"
+	} else {
+		msrmnt_name = "wordpress_" + w.Name
+	}
+	tags := map[string]string{}
+
+	parser, err := parsers.NewJSONLiteParser(msrmnt_name, w.SummaryStatsTagKeys, tags)
+	if err != nil {
+		return err
+	}
+	metrics, err := parser.Parse([]byte(resp))
+	if err != nil {
+		return err
+	}
+
+	for _, metric := range metrics {
+		fields := make(map[string]interface{})
+		for k, v := range metric.Fields() {
+			fields[k] = v
+		}
+		metric.AddTag("api", "summary")
 		acc.AddFields(metric.Name(), fields, metric.Tags())
 	}
 
