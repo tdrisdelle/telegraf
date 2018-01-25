@@ -141,8 +141,8 @@ func (w *Wordpress) Gather(acc telegraf.Accumulator) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		// acc.AddError(w.gatherTopPostsStats(acc))
-		// acc.AddError(w.gatherSummaryStats(acc))
+		acc.AddError(w.gatherTopPostsStats(acc))
+		acc.AddError(w.gatherSummaryStats(acc))
 		acc.AddError(w.gatherPosts(acc))
 	}()
 
