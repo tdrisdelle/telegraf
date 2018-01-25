@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -25,10 +26,12 @@ type Wordpress struct {
 	Name                string
 	TopPostsStatsURI    string
 	SummaryStatsURI     string
+	PostsURI            string
 	BearerToken         string
 	Method              string
 	TopPostsTagKeys     []string
 	SummaryStatsTagKeys []string
+	PostsTagKeys        []string
 	ResponseTimeout     internal.Duration
 	Parameters          map[string]string
 	Headers             map[string]string
@@ -83,6 +86,7 @@ var sampleConfig = `
 
   topPostsStatsURI = "https://public-api.wordpress.com/rest/v1/sites/YOUR_SITE_ID/stats/top-posts?fields=top-posts"
   summaryStatsURI = "https://public-api.wordpress.com/rest/v1.1/sites/YOUR_SITE_ID/stats/summary"
+  postsURI = "https://public-api.wordpress.com/rest/v1.1/sites/YOUR_SITE_ID/posts?fields=ID,author,date,modified,title,URL,tags,categories"
   
   ## Set response_timeout (default 5 seconds)
   response_timeout = "5s"
@@ -95,7 +99,10 @@ var sampleConfig = `
 	
   summary_stats_tag_keys = [
   ]
-
+	
+  posts_tag_keys = [
+  ]
+  
   ## HTTP Headers (all values must be strings)
   [inputs.wordpress.headers]
      authorization = "Bearer YOUR_BEARER_TOKEN"
@@ -134,8 +141,9 @@ func (w *Wordpress) Gather(acc telegraf.Accumulator) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		acc.AddError(w.gatherTopPostsStats(acc))
-		acc.AddError(w.gatherSummaryStats(acc))
+		// acc.AddError(w.gatherTopPostsStats(acc))
+		// acc.AddError(w.gatherSummaryStats(acc))
+		acc.AddError(w.gatherPosts(acc))
 	}()
 
 	wg.Wait()
@@ -168,7 +176,7 @@ func (w *Wordpress) gatherTopPostsStats(
 	if err != nil {
 		return err
 	}
-	resp = strings.TrimPrefix(resp, "{\"top-posts\":")
+	resp = strings.TrimPrefix(resp, "{\"days\":")
 	resp = strings.TrimSuffix(resp, "}")
 	metrics, err := parser.Parse([]byte(resp))
 	if err != nil {
@@ -181,6 +189,53 @@ func (w *Wordpress) gatherTopPostsStats(
 			fields[k] = v
 		}
 		metric.AddTag("api", "top-posts")
+		acc.AddFields(metric.Name(), fields, metric.Tags())
+	}
+
+	return nil
+}
+
+// Gathers data from a wordpress posts endpoint about posts
+// Parameters:
+//     acc      : The telegraf Accumulator to use
+//
+// Returns:
+//     error: Any error that may have occurred
+func (w *Wordpress) gatherPosts(
+	acc telegraf.Accumulator,
+) error {
+	resp, _, err := w.sendRequest(w.PostsURI)
+	if err != nil {
+		return err
+	}
+	var msrmnt_name string
+	if w.Name == "" {
+		msrmnt_name = "wordpress"
+	} else {
+		msrmnt_name = "wordpress_" + w.Name
+	}
+	tags := map[string]string{}
+
+	parser, err := parsers.NewJSONLiteParser(msrmnt_name, w.PostsTagKeys, tags)
+	if err != nil {
+		return err
+	}
+
+	reStr := regexp.MustCompile("^(.*?)(\\[.*\\])(,\"meta\":.*)$")
+	repStr := "$2"
+	resp = reStr.ReplaceAllString(resp, repStr)
+
+	metrics, err := parser.Parse([]byte(resp))
+	if err != nil {
+		return err
+	}
+
+	for _, metric := range metrics {
+		fields := make(map[string]interface{})
+		for k, v := range metric.Fields() {
+			fields[k] = v
+		}
+		metric.AddTag("api", "posts")
 		acc.AddFields(metric.Name(), fields, metric.Tags())
 	}
 
