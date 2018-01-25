@@ -230,13 +230,29 @@ func (w *Wordpress) gatherPosts(
 		return err
 	}
 
+	var categories_val string
+	var tags_val string
 	for _, metric := range metrics {
 		fields := make(map[string]interface{})
 		for k, v := range metric.Fields() {
-			fields[k] = v
+			if strings.HasPrefix(k, "categories") && strings.HasSuffix(k, "slug") {
+				categories_val = v.(string) + "," + categories_val
+			} else if strings.HasPrefix(k, "tags") && strings.HasSuffix(k, "slug") {
+				tags_val = v.(string) + "," + tags_val
+			} else if !strings.HasPrefix(k, "categories") && !strings.HasPrefix(k, "tags") {
+				fields[k] = v
+			}
+		}
+		if len(categories_val) > 0 {
+			fields["categories"] = strings.TrimSuffix(categories_val, ",")
+		}
+		if len(tags_val) > 0 {
+			fields["tags"] = strings.TrimSuffix(tags_val, ",")
 		}
 		metric.AddTag("api", "posts")
 		acc.AddFields(metric.Name(), fields, metric.Tags())
+		categories_val = ""
+		tags_val = ""
 	}
 
 	return nil
