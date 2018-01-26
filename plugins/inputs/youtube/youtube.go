@@ -151,7 +151,7 @@ func (y *YouTube) Gather(acc telegraf.Accumulator) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		acc.AddError(y.gatherPlaylist(acc))
+		acc.AddError(y.gatherPlaylist(acc, ""))
 	}()
 
 	wg.Wait()
@@ -167,8 +167,15 @@ func (y *YouTube) Gather(acc telegraf.Accumulator) error {
 //     error: Any error that may have occurred
 func (y *YouTube) gatherPlaylist(
 	acc telegraf.Accumulator,
+	pageToken string,
 ) error {
-	resp, _, err := y.sendRequest(y.PlaylistItemsURI + "&key=" + y.ApiKey)
+	var uri string
+	if pageToken == "" {
+		uri = y.PlaylistItemsURI + "&key=" + y.ApiKey
+	} else {
+		uri = y.PlaylistItemsURI + "&key=" + y.ApiKey + "&pageToken=" + pageToken
+	}
+	resp, _, err := y.sendRequest(uri)
 	if err != nil {
 		return err
 	}
@@ -194,6 +201,10 @@ func (y *YouTube) gatherPlaylist(
 	// iterate through the metric items in the playlist, extract their videoId
 	// and then request the stats for that video
 	for k, item := range playlistItemsMetrics[0].Fields() {
+		if k == "nextPageToken" {
+			acc.AddError(y.gatherPlaylist(acc, item.(string)))
+		}
+
 		if !strings.HasSuffix(k, "_videoId") {
 			continue
 		}
