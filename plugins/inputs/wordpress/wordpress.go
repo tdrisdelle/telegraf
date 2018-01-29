@@ -84,7 +84,7 @@ var sampleConfig = `
   ## will be ignored.
   interval = "24h"
 
-  topPostsStatsURI = "https://public-api.wordpress.com/rest/v1/sites/YOUR_SITE_ID/stats/top-posts?fields=top-posts"
+  topPostsStatsURI = "https://public-api.wordpress.com/rest/v1.1/sites/YOUR_SITE_ID/stats/top-posts?fields=days"
   summaryStatsURI = "https://public-api.wordpress.com/rest/v1.1/sites/YOUR_SITE_ID/stats/summary"
   postsURI = "https://public-api.wordpress.com/rest/v1.1/sites/YOUR_SITE_ID/posts?fields=ID,author,date,modified,title,URL,tags,categories"
   
@@ -93,7 +93,6 @@ var sampleConfig = `
 
   ## List of tag names to extract from top-level of JSON server response
   top_posts_tag_keys = [
-    "date",
 	"postId",
   ]
 	
@@ -176,8 +175,11 @@ func (w *Wordpress) gatherTopPostsStats(
 	if err != nil {
 		return err
 	}
-	resp = strings.TrimPrefix(resp, "{\"days\":")
-	resp = strings.TrimSuffix(resp, "}")
+
+	reStr := regexp.MustCompile("^(.*?)(\\[.*\\])(,\"total_views\":.*)$")
+	repStr := "$2"
+	resp = reStr.ReplaceAllString(resp, repStr)
+
 	metrics, err := parser.Parse([]byte(resp))
 	if err != nil {
 		return err
