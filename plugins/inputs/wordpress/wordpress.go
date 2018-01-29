@@ -93,7 +93,7 @@ var sampleConfig = `
 
   ## List of tag names to extract from top-level of JSON server response
   top_posts_tag_keys = [
-	"postId",
+	"id",
   ]
 	
   summary_stats_tag_keys = [
