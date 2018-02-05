@@ -103,7 +103,7 @@ func (w *Wordpress) SampleConfig() string {
 }
 
 func (w *Wordpress) Description() string {
-	return "Read flattened metrics from one or more JSON HTTP endpoints"
+	return "Read flattened metrics from Wordpress HTTP endpoints"
 }
 
 // Gathers data for blog posts.
@@ -143,12 +143,71 @@ func (w *Wordpress) Gather(acc telegraf.Accumulator) error {
 	return nil
 }
 
-// Gathers data from a wordpress stats endpoint about top posts
-// Parameters:
-//     acc      : The telegraf Accumulator to use
-//
-// Returns:
-//     error: Any error that may have occurred
+/*
+Gathers data from a wordpress stats endpoint about top posts. JSON return format is an array with
+a nesting that must be transformed from this:
+{
+    "days": {
+        "2018-02-05": {
+            "postviews": [
+                {
+                    "id": 8516,
+                    "href": "https:\/\/blog.wordpress.com\/2018\/02\/01\/foo\/",
+                    "date": "2018-02-01 09:15:27",
+                    "title": "Foo",
+                    "type": "post",
+                    "views": 16,
+                    "video_play": false
+                },
+                {
+                    "id": 6987,
+                    "href": "https:\/\/blog.wordpress.com\/2017\/06\/05\/bar\/",
+                    "date": "2017-06-05 16:17:01",
+                    "title": "Bar",
+                    "type": "post",
+                    "views": 16,
+                    "video_play": false
+                },
+            ],
+            "total_views": "126",
+            "other_views": 41
+        }
+    }
+}
+
+...into a higher-level array so that each tag becomes its own measurement. To do this, the JSON must
+end up looking like this:
+[
+    {
+        "id": 8516,
+        "href": "https:\/\/blog.wordpress.com\/2018\/02\/01\/foo\/",
+        "date": "2018-02-01 09:15:27",
+        "title": "Foo",
+        "type": "post",
+        "views": 16,
+        "video_play": false
+    },
+    {
+        "id": 6987,
+        "href": "https:\/\/blog.wordpress.com\/2017\/06\/05\/bar\/",
+        "date": "2017-06-05 16:17:01",
+        "title": "Bar",
+        "type": "post",
+        "views": 16,
+        "video_play": false
+    }
+]
+
+...and will result in measurements that look like this:
+wordpress_topposts,id=8516 views=16,video_play=false,href="https://blog.wordpress.com/2018/02/01/foo/",date="2018-02-01 09:15:27",title="Foo",type="post" 1517849912000000000
+wordpress_topposts,id=6987 date="2017-06-05 16:17:01",title="Bar",type="post",views=16,video_play=false,href="https://blog.wordpress.com/2017/06/05/bar/" 1517849912000000000
+
+	Parameters:
+		acc      : The telegraf Accumulator to use
+
+	Returns:
+		error: Any error that may have occurred
+*/
 func (w *Wordpress) gatherTopPostsStats(
 	acc telegraf.Accumulator,
 ) error {
@@ -185,12 +244,238 @@ func (w *Wordpress) gatherTopPostsStats(
 	return nil
 }
 
-// Gathers data from a wordpress posts endpoint about posts
-// Parameters:
-//     acc      : The telegraf Accumulator to use
-//
-// Returns:
-//     error: Any error that may have occurred
+/*
+Gathers data from a wordpress posts endpoint about posts. JSON return format is an array with
+a nesting that must be transformed from this:
+{
+	"found": 366,
+	"posts": [
+		{
+			"ID": 8552,
+			"author": {
+				"ID": 425,
+				"login": "authorAlpha@gmail.com",
+				"email": false,
+				"name": "[email protected]",
+				"first_name": "",
+				"last_name": "",
+				"nice_name": "community",
+				"URL": "",
+				"avatar_URL": "https://secure.gravatar.com/avatar/xxxxxxxxxxx?s=96&d=mm&r=g",
+				"profile_URL": "http://en.gravatar.com/xxxxxxxxxxx"
+			},
+			"date": "2018-02-05T09:26:45-05:00",
+			"modified": "2018-02-05T13:07:01-05:00",
+			"title": "Foo",
+			"URL": "https://blog.wordpress.com/2018/02/05/foo/",
+			"tags": {
+				"Tag A": {
+					"ID": 111,
+					"name": "Tag A",
+					"slug": "tag-a",
+					"description": "",
+					"post_count": 78,
+					"meta": {
+						"links": {
+							"self": "https://public-api.wordpress.com/rest/v1.1/sites/1234567/tags/slug:tag-a",
+							"help": "https://public-api.wordpress.com/rest/v1.1/sites/1234567/tags/slug:tag-a/help",
+							"site": "https://public-api.wordpress.com/rest/v1.1/sites/1234567"
+						}
+					}
+				}
+			},
+			"categories": {
+				"Category A": {
+					"ID": 257,
+					"name": "Category A",
+					"slug": "category-a",
+					"description": "",
+					"post_count": 4,
+					"meta": {
+						"links": {
+							"self": "https://public-api.wordpress.com/rest/v1.1/sites/1234567/categories/slug:category-a",
+							"help": "https://public-api.wordpress.com/rest/v1.1/sites/1234567/categories/slug:category-a/help",
+							"site": "https://public-api.wordpress.com/rest/v1.1/sites/1234567"
+						}
+					},
+					"parent": 0
+				}
+			}
+		},
+		{
+			"ID": 8535,
+			"author": {
+				"ID": 5,
+				"login": "authorBravo",
+				"email": false,
+				"name": "Author Bravo",
+				"first_name": "Author",
+				"last_name": "Bravo",
+				"nice_name": "authorbravo",
+				"URL": "",
+				"avatar_URL": "https://secure.gravatar.com/avatar/yyyyyyyyyyyyy?s=96&d=mm&r=g",
+				"profile_URL": "http://en.gravatar.com/yyyyyyyyyyyyy"
+			},
+			"date": "2018-02-05T09:05:59-05:00",
+			"modified": "2018-02-05T10:23:05-05:00",
+			"title": "Bar",
+			"URL": "https://blog.wordpress.com/2018/02/05/bar/",
+			"tags": {
+				"Tag A": {
+					"ID": 111,
+					"name": "Tag A",
+					"slug": "tag-a",
+					"description": "",
+					"post_count": 78,
+					"meta": {
+						"links": {
+							"self": "https://public-api.wordpress.com/rest/v1.1/sites/1234567/tags/slug:tag-a",
+							"help": "https://public-api.wordpress.com/rest/v1.1/sites/1234567/tags/slug:tag-a/help",
+							"site": "https://public-api.wordpress.com/rest/v1.1/sites/1234567"
+						}
+					}
+				},
+				"Tag B": {
+					"ID": 222,
+					"name": "Tag B",
+					"slug": "tag-b",
+					"description": "",
+					"post_count": 13,
+					"meta": {
+						"links": {
+							"self": "https://public-api.wordpress.com/rest/v1.1/sites/1234567/tags/slug:tag-b",
+							"help": "https://public-api.wordpress.com/rest/v1.1/sites/1234567/tags/slug:tag-b/help",
+							"site": "https://public-api.wordpress.com/rest/v1.1/sites/1234567"
+						}
+					}
+				}
+			},
+			"categories": {
+				"Category B": {
+					"ID": 149,
+					"name": "Category B",
+					"slug": "category-b",
+					"description": "",
+					"post_count": 110,
+					"meta": {
+						"links": {
+							"self": "https://public-api.wordpress.com/rest/v1.1/sites/1234567/categories/slug:category-b",
+							"help": "https://public-api.wordpress.com/rest/v1.1/sites/1234567/categories/slug:category-b/help",
+							"site": "https://public-api.wordpress.com/rest/v1.1/sites/1234567"
+						}
+					},
+					"parent": 0
+				}
+			}
+		}
+	],
+	"meta": {
+		"links": {
+			"counts": "https://public-api.wordpress.com/rest/v1.1/sites/1234567/post-counts/post"
+		},
+		"next_page": "value=2018-02-05T09%3A05%3A59-05%3A00&id=8535"
+	}
+}
+
+...into a higher-level array so that each tag becomes its own measurement. To do this, the JSON must
+end up looking like this:
+[
+	{
+		"ID": 8552,
+		"author": {
+			"ID": 425,
+			"login": "authorAlpha@gmail.com",
+			"email": false,
+			"name": "[email protected]",
+			"first_name": "",
+			"last_name": "",
+			"nice_name": "community",
+			"URL": "",
+			"avatar_URL": "https://secure.gravatar.com/avatar/xxxxxxxxxxx?s=96&d=mm&r=g",
+			"profile_URL": "http://en.gravatar.com/xxxxxxxxxxx"
+		},
+		"date": "2018-02-05T09:26:45-05:00",
+		"modified": "2018-02-05T13:07:01-05:00",
+		"title": "Foo",
+		"URL": "https://blog.wordpress.com/2018/02/05/foo/",
+		"tags": {
+			"Tag A": {
+				"ID": 111,
+				"name": "Tag A",
+				"slug": "tag-a",
+				"description": "",
+				"post_count": 78,
+			}
+		},
+		"categories": {
+			"Category A": {
+				"ID": 257,
+				"name": "Category A",
+				"slug": "category-a",
+				"description": "",
+				"post_count": 4,
+				"parent": 0
+			}
+		}
+	},
+	{
+		"ID": 8535,
+		"author": {
+			"ID": 5,
+			"login": "authorBravo",
+			"email": false,
+			"name": "Author Bravo",
+			"first_name": "Author",
+			"last_name": "Bravo",
+			"nice_name": "authorbravo",
+			"URL": "",
+			"avatar_URL": "https://secure.gravatar.com/avatar/yyyyyyyyyyyyy?s=96&d=mm&r=g",
+			"profile_URL": "http://en.gravatar.com/yyyyyyyyyyyyy"
+		},
+		"date": "2018-02-05T09:05:59-05:00",
+		"modified": "2018-02-05T10:23:05-05:00",
+		"title": "Bar",
+		"URL": "https://blog.wordpress.com/2018/02/05/bar/",
+		"tags": {
+			"Tag A": {
+				"ID": 111,
+				"name": "Tag A",
+				"slug": "tag-a",
+				"description": "",
+				"post_count": 78,
+			},
+			"Tag B": {
+				"ID": 222,
+				"name": "Tag B",
+				"slug": "tag-b",
+				"description": "",
+				"post_count": 13,
+			}
+		},
+		"categories": {
+			"Category B": {
+				"ID": 149,
+				"name": "Category B",
+				"slug": "category-b",
+				"description": "",
+				"post_count": 110,
+				"parent": 0
+			}
+		}
+	}
+]
+
+
+...and will result in measurements that look like this:
+wordpress_posts,ID=8552 author_URL="",author_profile_URL="http://en.gravatar.com/x",author_login="author0@gmail.com",date="2018-02-05T09:26:45-05:00",author_last_name="",author_name="author0@gmail.com",author_ID=425,author_first_name="",author_email=false,modified="2018-02-05T09:26:45-05:00",URL="https://blog.wordpress.com/2018/02/05/foo/",tags="tag_a",author_nice_name="author0gmail-com",title="Foo",author_avatar_URL="https://secure.gravatar.com/avatar/x?s=96&d=mm&r=g",categories="cat_a" 1517851161000000000
+wordpress_posts,ID=8535 author_profile_URL="http://en.gravatar.com/y",author_ID=5,author_last_name="2",author_login="author2",author_URL="",author_name="Author 2",author_avatar_URL="https://secure.gravatar.com/avatar/y?s=96&d=mm&r=g",modified="2018-02-05T10:23:05-05:00",author_nice_name="author2",tags="tag_a,tag_b",author_email=false,title="Bar",categories="cat_b",author_first_name="Author",date="2018-02-05T09:05:59-05:00",URL="https://blog.wordpress.com/2018/02/05/bar/" 1517851161000000000
+
+	Parameters:
+		acc      : The telegraf Accumulator to use
+
+	Returns:
+		error: Any error that may have occurred
+*/
 func (w *Wordpress) gatherPosts(
 	acc telegraf.Accumulator,
 ) error {
@@ -207,8 +492,14 @@ func (w *Wordpress) gatherPosts(
 		return err
 	}
 
-	reStr := regexp.MustCompile("^(.*?)(\\[.*\\])(,\"meta\":.*)$")
-	repStr := "$2"
+	// Strip out all of the "meta" blocks
+	reStr := regexp.MustCompile(",\"meta\":\\s*{.*?}}")
+	repStr := ""
+	resp = reStr.ReplaceAllString(resp, repStr)
+
+	// Trim off the leading preamble
+	reStr = regexp.MustCompile("^.*?(\\[.*\\])")
+	repStr = "$1"
 	resp = reStr.ReplaceAllString(resp, repStr)
 
 	metrics, err := parser.Parse([]byte(resp))
@@ -243,12 +534,26 @@ func (w *Wordpress) gatherPosts(
 	return nil
 }
 
-// Gathers data from a wordpress stats endpoint about site summary
-// Parameters:
-//     acc      : The telegraf Accumulator to use
-//
-// Returns:
-//     error: Any error that may have occurred
+/*
+Gathers data from a wordpress stats endpoint about site summary. JSON return format is an array with
+a nesting that looks like this:
+	{
+	    "date": "2018-02-05",
+	    "period": "day",
+	    "views": 127,
+	    "visitors": 97,
+	    "likes": 0,
+	    "reblogs": 0,
+	    "comments": 0,
+	    "followers": 3
+	}
+
+	Parameters:
+		acc      : The telegraf Accumulator to use
+
+	Returns:
+		error: Any error that may have occurred
+*/
 func (w *Wordpress) gatherSummaryStats(
 	acc telegraf.Accumulator,
 ) error {
