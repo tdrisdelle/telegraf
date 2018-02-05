@@ -38,15 +38,6 @@ type Wordpress struct {
 	Parameters          map[string]string
 	Headers             map[string]string
 
-	// Path to CA file
-	SSLCA string `toml:"ssl_ca"`
-	// Path to host cert file
-	SSLCert string `toml:"ssl_cert"`
-	// Path to cert key file
-	SSLKey string `toml:"ssl_key"`
-	// Use SSL but skip chain & host verification
-	InsecureSkipVerify bool
-
 	client HTTPClient
 }
 
@@ -120,14 +111,8 @@ func (w *Wordpress) Gather(acc telegraf.Accumulator) error {
 	var wg sync.WaitGroup
 
 	if w.client.HTTPClient() == nil {
-		tlsCfg, err := internal.GetTLSConfig(
-			w.SSLCert, w.SSLKey, w.SSLCA, w.InsecureSkipVerify)
-		if err != nil {
-			return err
-		}
 		tr := &http.Transport{
 			ResponseHeaderTimeout: w.ResponseTimeout.Duration,
-			TLSClientConfig:       tlsCfg,
 		}
 		client := &http.Client{
 			Transport: tr,
