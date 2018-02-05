@@ -71,6 +71,7 @@ func NewHTTPClient(consumerKey string, consumerSecret string, accessToken string
 }
 
 var sampleConfig = `
+  interval = "1h"
     
   consumerKey = ""
   consumerSecret = ""
