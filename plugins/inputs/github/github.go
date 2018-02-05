@@ -77,7 +77,7 @@ var sampleConfig = `
     "id",
   ]
   
-  fieldpass = ["forks", "open_issues", "watchers", "html_url", "name"]
+  fieldpass = ["forks", "open_issues", "watchers", "html_url", "name", "stargazers_count"]
   
 `
 
