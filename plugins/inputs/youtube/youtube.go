@@ -27,9 +27,11 @@ type YouTube struct {
 	PlaylistItemsURI   string
 	VideoStatisticsURI string
 	ApiKey             string
-	Method             string
 	TagKeys            []string
+	Method             string
 	ResponseTimeout    internal.Duration
+	Parameters         map[string]string
+	Headers            map[string]string
 
 	client HTTPClient
 }
@@ -224,8 +226,20 @@ func (y *YouTube) sendRequest(serverURL string) (string, float64, error) {
 	}
 
 	data := url.Values{}
-	params := requestURL.Query()
-	requestURL.RawQuery = params.Encode()
+	switch {
+	case y.Method == "GET":
+		params := requestURL.Query()
+		for k, v := range y.Parameters {
+			params.Add(k, v)
+		}
+		requestURL.RawQuery = params.Encode()
+
+	case y.Method == "POST":
+		requestURL.RawQuery = ""
+		for k, v := range y.Parameters {
+			data.Add(k, v)
+		}
+	}
 
 	// Create + send request
 	req, err := http.NewRequest(y.Method, requestURL.String(),

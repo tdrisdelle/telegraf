@@ -28,12 +28,11 @@ type Wordpress struct {
 	SummaryStatsURI     string
 	PostsURI            string
 	TagStatsURI         string
-	BearerToken         string
-	Method              string
 	TopPostsTagKeys     []string
 	SummaryStatsTagKeys []string
 	PostsTagKeys        []string
 	TagStatsTagKeys     []string
+	Method              string
 	ResponseTimeout     internal.Duration
 	Parameters          map[string]string
 	Headers             map[string]string
