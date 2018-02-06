@@ -23,10 +23,13 @@ var (
 // Github struct
 type Github struct {
 	Name            string
-	StatsURI        string
-	Method          string
+	OrgId           string
+	GetContributors bool
 	TagKeys         []string
+	Method          string
 	ResponseTimeout internal.Duration
+	Parameters      map[string]string
+	Headers         map[string]string
 
 	client HTTPClient
 }
@@ -63,21 +66,25 @@ func (c *RealHTTPClient) HTTPClient() *http.Client {
 }
 
 var sampleConfig = `
-  ## NOTE This plugin only reads numerical measurements, strings and booleans
-  ## will be ignored.
   interval = "1h"
 
-  statsURI = "https://api.github.com/users/YOUR_ORG_ID/repos"
+  org_id = "YOUR_ORG_ID"
   
   ## Set response_timeout (default 5 seconds)
   response_timeout = "5s"
+  
+  get_contributors = true
 
   ## List of tag names to extract from top-level of JSON server response
   tag_keys = [
     "id",
   ]
+	 
+  fieldpass = ["forks", "open_issues", "watchers", "stargazers_count", "html_url", "name", "login", "contributions"]
   
-  fieldpass = ["forks", "open_issues", "watchers", "html_url", "name", "stargazers_count"]
+  ## HTTP Headers (all values must be strings)
+  [inputs.github.headers]
+     Authorization = "token YOUR_AUTH_TOKEN"
   
 `
 
@@ -124,7 +131,8 @@ func (g *Github) Gather(acc telegraf.Accumulator) error {
 func (g *Github) gatherTopStats(
 	acc telegraf.Accumulator,
 ) error {
-	resp, _, err := g.sendRequest(g.StatsURI)
+	statsURI := "https://api.github.com/users/" + g.OrgId + "/repos"
+	resp, _, err := g.sendRequest(statsURI)
 	if err != nil {
 		return err
 	}
@@ -143,9 +151,59 @@ func (g *Github) gatherTopStats(
 
 	for _, metric := range metrics {
 		fields := make(map[string]interface{})
+		var repo string
+		for k, v := range metric.Fields() {
+			fields[k] = v
+			if k == "name" {
+				repo = v.(string)
+			}
+		}
+		acc.AddFields(metric.Name(), fields, metric.Tags())
+
+		if g.GetContributors {
+			acc.AddError(g.gatherRepoContributors(acc, repo))
+		}
+	}
+
+	return nil
+}
+
+// Gathers data from a github stats endpoint about repo contributors
+// Parameters:
+//     acc      : The telegraf Accumulator to use
+//	   repo		: Repo name to get contributors for
+//
+// Returns:
+//     error: Any error that may have occurred
+func (g *Github) gatherRepoContributors(
+	acc telegraf.Accumulator,
+	repo string,
+) error {
+	repoContributorsURI := "https://api.github.com/repos/" + g.OrgId + "/" + repo + "/contributors"
+
+	resp, _, err := g.sendRequest(repoContributorsURI)
+	if err != nil {
+		return err
+	}
+
+	msrmnt_name := "github_contributors"
+	tags := map[string]string{}
+
+	parser, err := parsers.NewJSONLiteParser(msrmnt_name, g.TagKeys, tags)
+	if err != nil {
+		return err
+	}
+	metrics, err := parser.Parse([]byte(resp))
+	if err != nil {
+		return err
+	}
+
+	for _, metric := range metrics {
+		fields := make(map[string]interface{})
 		for k, v := range metric.Fields() {
 			fields[k] = v
 		}
+		metric.AddTag("repo", repo)
 		acc.AddFields(metric.Name(), fields, metric.Tags())
 	}
 
@@ -168,14 +226,35 @@ func (g *Github) sendRequest(serverURL string) (string, float64, error) {
 	}
 
 	data := url.Values{}
-	params := requestURL.Query()
-	requestURL.RawQuery = params.Encode()
+	switch {
+	case g.Method == "GET":
+		params := requestURL.Query()
+		for k, v := range g.Parameters {
+			params.Add(k, v)
+		}
+		requestURL.RawQuery = params.Encode()
+
+	case g.Method == "POST":
+		requestURL.RawQuery = ""
+		for k, v := range g.Parameters {
+			data.Add(k, v)
+		}
+	}
 
 	// Create + send request
 	req, err := http.NewRequest(g.Method, requestURL.String(),
 		strings.NewReader(data.Encode()))
 	if err != nil {
 		return "", -1, err
+	}
+
+	// Add header parameters
+	for k, v := range g.Headers {
+		if strings.ToLower(k) == "host" {
+			req.Host = v
+		} else {
+			req.Header.Add(k, v)
+		}
 	}
 
 	start := time.Now()
