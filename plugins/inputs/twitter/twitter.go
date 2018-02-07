@@ -77,7 +77,9 @@ var sampleConfig = `
   consumerSecret = ""
   accessToken  = ""
   accessSecret = ""
-  
+
+  ## Parameters used when for getting User Timeline
+  ## https://developer.twitter.com/en/docs/tweets/timelines/api-reference/get-statuses-user_timeline.html
   screenName = "twitter"
   count = 5
   trimUser = false
