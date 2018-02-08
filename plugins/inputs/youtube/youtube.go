@@ -68,8 +68,7 @@ func (c *RealHTTPClient) HTTPClient() *http.Client {
 }
 
 var sampleConfig = `
-  ## NOTE This plugin only reads numerical measurements, strings and booleans
-  ## will be ignored.
+  interval = "15m"
 
   playlistItemsURI = "https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=YOUR_YOUTUBE_PLAYLISTID"
   videoStatisticsURI = "https://www.googleapis.com/youtube/v3/videos?part=statistics,snippet"

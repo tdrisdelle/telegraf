@@ -66,7 +66,7 @@ func (c *RealHTTPClient) HTTPClient() *http.Client {
 }
 
 var sampleConfig = `
-  interval = "1h"
+  interval = "15m"
 
   org_id = "YOUR_ORG_ID"
   

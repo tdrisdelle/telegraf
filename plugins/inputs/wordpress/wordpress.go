@@ -72,9 +72,9 @@ func (c *RealHTTPClient) HTTPClient() *http.Client {
 }
 
 var sampleConfig = `
-  interval = "24h"
+  interval = "15m"
 
-  topPostsStatsURI = "https://public-api.wordpress.com/rest/v1.1/sites/YOUR_SITE_ID/stats/top-posts?fields=days"
+  topPostsStatsURI = "https://public-api.wordpress.com/rest/v1.1/sites/YOUR_SITE_ID/stats/top-posts?fields=days&max=100"
   summaryStatsURI = "https://public-api.wordpress.com/rest/v1.1/sites/YOUR_SITE_ID/stats/summary"
   postsURI = "https://public-api.wordpress.com/rest/v1.1/sites/YOUR_SITE_ID/posts?fields=ID,author,date,modified,title,URL,tags,categories"
   tagStatsURI = "https://public-api.wordpress.com/rest/v1.1/sites/YOUR_SITE_ID/stats/tags"
