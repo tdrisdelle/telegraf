@@ -151,17 +151,22 @@ func (g *Github) gatherTopStats(
 
 	for _, metric := range metrics {
 		fields := make(map[string]interface{})
-		var repo string
 		for k, v := range metric.Fields() {
 			fields[k] = v
-			if k == "name" {
-				repo = v.(string)
-			}
 		}
 		acc.AddFields(metric.Name(), fields, metric.Tags())
 
-		if g.GetContributors {
-			acc.AddError(g.gatherRepoContributors(acc, repo))
+		if g.GetContributors && metric.HasTag("name") && metric.HasTag("id") {
+			var repo_name string
+			var repo_id string
+			for k, v := range metric.Tags() {
+				if k == "name" {
+					repo_name = v
+				} else if k == "id" {
+					repo_id = v
+				}
+			}
+			acc.AddError(g.gatherRepoContributors(acc, repo_name, repo_id))
 		}
 	}
 
@@ -177,9 +182,10 @@ func (g *Github) gatherTopStats(
 //     error: Any error that may have occurred
 func (g *Github) gatherRepoContributors(
 	acc telegraf.Accumulator,
-	repo string,
+	repo_name string,
+	repo_id string,
 ) error {
-	repoContributorsURI := "https://api.github.com/repos/" + g.OrgId + "/" + repo + "/contributors"
+	repoContributorsURI := "https://api.github.com/repos/" + g.OrgId + "/" + repo_name + "/contributors"
 
 	resp, _, err := g.sendRequest(repoContributorsURI)
 	if err != nil {
@@ -203,7 +209,8 @@ func (g *Github) gatherRepoContributors(
 		for k, v := range metric.Fields() {
 			fields[k] = v
 		}
-		metric.AddTag("repo", repo)
+		metric.AddTag("repo", repo_name)
+		metric.AddTag("repo_id", repo_id)
 		acc.AddFields(metric.Name(), fields, metric.Tags())
 	}
 
