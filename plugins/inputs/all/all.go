@@ -90,6 +90,7 @@ import (
 	_ "github.com/influxdata/telegraf/plugins/inputs/tomcat"
 	_ "github.com/influxdata/telegraf/plugins/inputs/trig"
 	_ "github.com/influxdata/telegraf/plugins/inputs/twemproxy"
+	_ "github.com/influxdata/telegraf/plugins/inputs/twitter"
 	_ "github.com/influxdata/telegraf/plugins/inputs/udp_listener"
 	_ "github.com/influxdata/telegraf/plugins/inputs/varnish"
 	_ "github.com/influxdata/telegraf/plugins/inputs/webhooks"
