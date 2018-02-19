@@ -15,6 +15,7 @@ import (
 type JSONParser struct {
 	MetricName  string
 	TagKeys     []string
+	ParseAll    bool
 	DefaultTags map[string]string
 }
 
@@ -53,7 +54,7 @@ func (p *JSONParser) parseObject(metrics []telegraf.Metric, jsonOut map[string]i
 	}
 
 	f := JSONFlattener{}
-	err := f.FlattenJSON("", jsonOut)
+	err := f.FullFlattenJSON("", jsonOut, p.ParseAll, p.ParseAll)
 	if err != nil {
 		return nil, err
 	}

@@ -53,6 +53,8 @@ type Config struct {
 	TagKeys []string
 	// MetricName applies to JSON & value. This will be the name of the measurement.
 	MetricName string
+	// ParseAll only applies to JSON data, and forces parsing of strings and bools.
+	ParseAll bool
 
 	// Authentication file for collectd
 	CollectdAuthFile string
@@ -74,8 +76,13 @@ func NewParser(config *Config) (Parser, error) {
 	var parser Parser
 	switch config.DataFormat {
 	case "json":
-		parser, err = NewJSONParser(config.MetricName,
-			config.TagKeys, config.DefaultTags)
+		if config.ParseAll {
+			parser, err = NewJSONFullParser(config.MetricName,
+				config.TagKeys, config.DefaultTags, config.ParseAll)
+		} else {
+			parser, err = NewJSONParser(config.MetricName,
+				config.TagKeys, config.DefaultTags)
+		}
 	case "value":
 		parser, err = NewValueParser(config.MetricName,
 			config.DataType, config.DefaultTags)
@@ -104,6 +111,22 @@ func NewJSONParser(
 		MetricName:  metricName,
 		TagKeys:     tagKeys,
 		DefaultTags: defaultTags,
+		ParseAll:    false,
+	}
+	return parser, nil
+}
+
+func NewJSONFullParser(
+	metricName string,
+	tagKeys []string,
+	defaultTags map[string]string,
+	parseAll bool,
+) (Parser, error) {
+	parser := &json.JSONParser{
+		MetricName:  metricName,
+		TagKeys:     tagKeys,
+		DefaultTags: defaultTags,
+		ParseAll:    parseAll,
 	}
 	return parser, nil
 }
